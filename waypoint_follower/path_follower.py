@@ -9,6 +9,8 @@ from rclpy.node import Node
 from nav_msgs.msg import Odometry, Path
 from geometry_msgs.msg import Twist, PoseStamped
 
+import sys
+
 
 class PathFollower(Node):
     """
@@ -179,8 +181,11 @@ def main(args=None):
 
     # Specify the odometry topic (default is '/Odometry')
     odometry_topic = '/Odometry'  # Default value
-    if len(args) > 1:
-        odometry_topic = args[1]  # Override with command-line argument
+
+    # Safely check command-line arguments
+    cli_args = sys.argv if args is None else args
+    if len(cli_args) > 1:
+        odometry_topic = cli_args[1]  # Override with command-line argument
 
     node = PathFollower(odometry_topic)
 
@@ -194,5 +199,4 @@ def main(args=None):
 
 
 if __name__ == '__main__':
-    import sys
     main(sys.argv)
