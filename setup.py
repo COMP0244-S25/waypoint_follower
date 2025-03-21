@@ -29,10 +29,7 @@ setup(
             'odometry_conversion = waypoint_follower.odometry_conversion:main',
             'publish_eight_shape = waypoint_follower.publish_eight_shape:main',
             'publish_ellipse_shape = waypoint_follower.publish_ellipse_shape:main',
-            'publish_cosince_shape = waypoint_follower.publish_cosince_shape:main',
-            'publish_shape1 = waypoint_follower.publish_shape1:main',
-            'publish_shape2 = waypoint_follower.publish_shape2:main',
-            'publish_shape3 = waypoint_follower.publish_shape3:main'
+            'publish_cosince_shape = waypoint_follower.publish_cosince_shape:main'
         ],
     },
 )
