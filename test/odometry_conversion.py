@@ -81,8 +81,12 @@ class OdometryPathPublisher(Node):
         self.path_pub.publish(self.path_msg)
         self.get_logger().debug(f"Published path with {len(self.path_msg.poses)} poses", throttle_duration_sec=1)
 
-def main(args=None):
+def main():
+    import sys
+    args = sys.argv 
+
     rclpy.init(args=args)
+
     node = OdometryPathPublisher()
     try:
         rclpy.spin(node)

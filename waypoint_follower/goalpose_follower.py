@@ -1,5 +1,3 @@
-# python3 src/waypoint_follower/waypoint_follower/goalpose_follower.py /custom_odometry_topic
-
 #!/usr/bin/env python3
 
 import math
@@ -181,14 +179,16 @@ class GoalPoseFollower(Node):
         return angle
 
 
-def main(args=None):
+def main():
+    import sys
+    args = sys.argv 
+
     rclpy.init(args=args)
 
-    # Specify the odometry topic (default is '/Odometry')
     odometry_topic = '/Odometry'  # Default value
-    if len(args) > 1:
+    if args is not None and len(args) > 1:
         odometry_topic = args[1]  # Override with command-line argument
-
+        
     node = GoalPoseFollower(odometry_topic)
 
     try:
@@ -201,5 +201,4 @@ def main(args=None):
 
 
 if __name__ == '__main__':
-    import sys
-    main(sys.argv)
+    main()

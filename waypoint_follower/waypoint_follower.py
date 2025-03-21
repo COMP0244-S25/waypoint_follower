@@ -180,7 +180,10 @@ class WaypointFollower(Node):
         return angle
 
 
-def main(args=None):
+def main():
+    import sys
+    args = sys.argv 
+
     rclpy.init(args=args)
     node = WaypointFollower()
 

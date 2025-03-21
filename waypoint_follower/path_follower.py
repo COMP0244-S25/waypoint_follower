@@ -18,7 +18,6 @@ class PathFollower(Node):
     and publishes velocity commands to /cmd_vel.
     """
 
-    # NOTE: students can change this function
     def __init__(self, odometry_topic):
         super().__init__('path_follower')
 
@@ -69,7 +68,7 @@ class PathFollower(Node):
         self.timer = self.create_timer(timer_period, self.control_loop_callback)
         self.get_logger().info(f"Path Follower node started. Subscribing to odometry topic: {odometry_topic}")
 
-    # NOTE: students can change this function
+    # NOTE: CAN CHANGE
     def setup_parameters(self):
         # Maximum velocities
         self.max_linear_vel = 1.0  # meter
@@ -81,7 +80,7 @@ class PathFollower(Node):
         self.Kp_angular = 1.0
         self.Kd_angular = 0.1
 
-    # NOTE: students can change this function
+    # NOTE: CAN CHANGE
     def path_callback(self, msg: Path):
         """
         Updates the target path when a new message is received.
@@ -92,7 +91,6 @@ class PathFollower(Node):
         self.start_time = time.time()
         self.end_time = 0
 
-    # NOTE: students cannot change this function
     def odom_callback(self, msg: Odometry):
         """
         Extracts and stores the robot's current pose from the odometry.
@@ -107,7 +105,6 @@ class PathFollower(Node):
         cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
         self.current_orientation = math.atan2(siny_cosp, cosy_cosp)
 
-    # NOTE: students cannot change this function
     def control_loop_callback(self):
         """
         Periodic control loop callback. Computes PD control and publishes velocity commands.
@@ -122,11 +119,11 @@ class PathFollower(Node):
 
         # Check if all waypoints are reached
         if self.current_waypoint_index >= len(self.path):
-            self.get_logger().info("All waypoints reached. Stopping.")
+            self.get_logger().info(f"----- All waypoints reached. Stopping. ---- ")
+            self.get_logger().info(f"Sum of error: {self.sum_derivate:.3f}, Cost time: {self.end_time - self.start_time:.3f}s.")
             self.cmd_vel_pub.publish(Twist())  # Stop the robot
             if self.end_time < 1e-3:
                 self.end_time = time.time()
-            print(f"----- Sum of error: {self.sum_derivate:.3f}, Cost time: {self.end_time - self.start_time:.3f}s -----")
             return
 
         # Get the current target waypoint
@@ -171,7 +168,7 @@ class PathFollower(Node):
         distance_to_waypoint = math.hypot(error_x, error_y)
         if distance_to_waypoint < self.waypoint_threshold:
             self.current_waypoint_index += 1  # Move to the next waypoint
-            self.get_logger().info(f"Reached waypoint {self.current_waypoint_index - 1}. Moving to the next one.")
+            # self.get_logger().info(f"Reached waypoint {self.current_waypoint_index - 1}. Moving to the next one.")
         else:
             # Move toward the current waypoint
             if abs(error_theta) > 1.0 and distance_to_waypoint > self.waypoint_threshold:
@@ -184,7 +181,6 @@ class PathFollower(Node):
 
         self.cmd_vel_pub.publish(twist_msg)
 
-    # NOTE: students cannot change this function
     def normalize_angle(self, angle):
         """
         Normalize an angle to the range [-pi, pi].
@@ -196,14 +192,14 @@ class PathFollower(Node):
         return angle
 
 
-def main(args=None):
+def main():
+    import sys
+    args = sys.argv 
+
     rclpy.init(args=args)
 
     # Specify the odometry topic (default is '/Odometry')
     odometry_topic = '/Odometry'  # Default value
-    if len(args) > 1:
-        odometry_topic = args[1]  # Override with command-line argument
-
     node = PathFollower(odometry_topic)
 
     try:
@@ -216,5 +212,4 @@ def main(args=None):
 
 
 if __name__ == '__main__':
-    import sys
-    main(sys.argv)
+    main()
