@@ -45,9 +45,9 @@ class EightShapePathPublisher(Node):
 
     def generate_and_publish_path(self, frame_id, x0, y0):
         """Generate an eight-shaped path starting at (x0, y0)."""
-        a = 1.2  # Scale factor for the eight shape (adjust as needed)
+        a = 0.6  # Scale factor for the eight shape (adjust as needed)
         dt = 0.01  # Step size for parameter t (smaller = smoother)
-        min_distance = 0.5  # Minimum distance between consecutive points
+        min_distance = 0.2  # Minimum distance between consecutive points
         
         # Generate dense points along the eight shape
         dense_points = []
@@ -59,7 +59,7 @@ class EightShapePathPublisher(Node):
             dense_points.append((x, y))
             t += dt
         
-        # Downsample to ensure ~0.5m spacing between points
+        # Downsample to ensure min_distance spacing between points
         sparse_points = []
         last_point = None
         for point in dense_points:

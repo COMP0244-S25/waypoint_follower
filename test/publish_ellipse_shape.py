@@ -45,7 +45,7 @@ class OvalPathPublisher(Node):
 
     def generate_and_publish_path(self, frame_id, x0, y0):
         """Generate an oval-shaped path centered relative to (x0, y0), starting at initial position."""
-        a = 1.5  # Horizontal radius (x-axis)
+        a = 1.0  # Horizontal radius (x-axis)
         b = 0.7  # Vertical radius (y-axis)
         dt = 0.01  # Step size for parameter t
         min_distance = 0.5  # Minimum distance between consecutive points

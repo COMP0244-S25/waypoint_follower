@@ -56,7 +56,7 @@ class CosineCurvePublisher(Node):
         """
         f = 0.5  # Frequency of the cosine curve (oscillations per unit distance)
         step_x = 0.1  # Step size for x-axis
-        L = 10.0  # Total length of the path
+        L = 3.0  # Total length of the path
         
         # Generate dense points starting at (x0, y0)
         dense_points = []

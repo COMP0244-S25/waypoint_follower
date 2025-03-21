@@ -5,6 +5,7 @@
 import math
 import rclpy
 from rclpy.node import Node
+import time
 
 from nav_msgs.msg import Odometry, Path
 from geometry_msgs.msg import Twist, PoseStamped
@@ -17,26 +18,20 @@ class PathFollower(Node):
     and publishes velocity commands to /cmd_vel.
     """
 
+    # NOTE: students can change this function
     def __init__(self, odometry_topic):
         super().__init__('path_follower')
+
+        self.setup_parameters()
+
+        # sum of derivate
+        self.sum_derivate = 0
+        self.start_time = 0
+        self.end_time = 0
 
         # Path and waypoints
         self.path = None
         self.current_waypoint_index = 0
-
-        # Thresholds
-        self.waypoint_threshold = 0.1  # Distance threshold to consider a waypoint reached
-        self.orientation_threshold = 0.05  # Orientation threshold for final alignment
-
-        # Maximum velocities
-        self.max_linear_vel = 0.5
-        self.max_angular_vel = 0.5
-
-        # PD Controller Gains (tune as necessary)
-        self.Kp_linear = 1.0
-        self.Kd_linear = 0.1
-        self.Kp_angular = 1.0
-        self.Kd_angular = 0.1
 
         # Previous errors (for derivative term)
         self.prev_error_x = 0.0
@@ -72,9 +67,21 @@ class PathFollower(Node):
         # Timer to periodically publish velocity commands
         timer_period = 0.1  # [s] -> 10 Hz
         self.timer = self.create_timer(timer_period, self.control_loop_callback)
-
         self.get_logger().info(f"Path Follower node started. Subscribing to odometry topic: {odometry_topic}")
 
+    # NOTE: students can change this function
+    def setup_parameters(self):
+        # Maximum velocities
+        self.max_linear_vel = 1.0  # meter
+        self.max_angular_vel = 0.5 # rad
+
+        # PD Controller Gains (tune as necessary)
+        self.Kp_linear = 1.0
+        self.Kd_linear = 0.1
+        self.Kp_angular = 1.0
+        self.Kd_angular = 0.1
+
+    # NOTE: students can change this function
     def path_callback(self, msg: Path):
         """
         Updates the target path when a new message is received.
@@ -82,7 +89,10 @@ class PathFollower(Node):
         self.path = msg.poses  # List of PoseStamped messages
         self.current_waypoint_index = 0  # Reset to the first waypoint
         self.get_logger().info(f"Received new path with {len(self.path)} waypoints.")
+        self.start_time = time.time()
+        self.end_time = 0
 
+    # NOTE: students cannot change this function
     def odom_callback(self, msg: Odometry):
         """
         Extracts and stores the robot's current pose from the odometry.
@@ -97,17 +107,26 @@ class PathFollower(Node):
         cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
         self.current_orientation = math.atan2(siny_cosp, cosy_cosp)
 
+    # NOTE: students cannot change this function
     def control_loop_callback(self):
         """
         Periodic control loop callback. Computes PD control and publishes velocity commands.
         """
+        # Thresholds
+        self.waypoint_threshold = 0.1  # Distance threshold to consider a waypoint reached
+        self.orientation_threshold = 0.05  # Orientation threshold for final alignment
+
         if not self.is_odom_received or self.path is None:
+            self.cmd_vel_pub.publish(Twist())
             return
 
         # Check if all waypoints are reached
         if self.current_waypoint_index >= len(self.path):
             self.get_logger().info("All waypoints reached. Stopping.")
             self.cmd_vel_pub.publish(Twist())  # Stop the robot
+            if self.end_time < 1e-3:
+                self.end_time = time.time()
+            print(f"----- Sum of error: {self.sum_derivate:.3f}, Cost time: {self.end_time - self.start_time:.3f}s -----")
             return
 
         # Get the current target waypoint
@@ -131,6 +150,7 @@ class PathFollower(Node):
         derivative_x = error_x - self.prev_error_x
         derivative_y = error_y - self.prev_error_y
         derivative_theta = error_theta - self.prev_error_theta
+        self.sum_derivate += math.fabs(derivative_x) + math.fabs(derivative_y) + math.fabs(derivative_theta) / 180.0 * math.pi
 
         # 3) PD control for linear velocities (x, y)
         vx = self.Kp_linear * error_x + self.Kd_linear * derivative_x
@@ -164,6 +184,7 @@ class PathFollower(Node):
 
         self.cmd_vel_pub.publish(twist_msg)
 
+    # NOTE: students cannot change this function
     def normalize_angle(self, angle):
         """
         Normalize an angle to the range [-pi, pi].
