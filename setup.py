@@ -26,10 +26,13 @@ setup(
             'waypoint_follower = waypoint_follower.waypoint_follower:main',
             'path_follower = waypoint_follower.path_follower:main',
             'goalpose_follower = waypoint_follower.goalpose_follower:main',
-            'odometry_conversion = test.odometry_conversion:main',
-            'publish_eight_shape = test.publish_eight_shape:main',
-            'publish_ellipse_shape = test.publish_ellipse_shape:main',
-            'publish_cosince_shape = test.publish_cosince_shape:main'
+            'odometry_conversion = waypoint_follower.odometry_conversion:main',
+            'publish_eight_shape = waypoint_follower.publish_eight_shape:main',
+            'publish_ellipse_shape = waypoint_follower.publish_ellipse_shape:main',
+            'publish_cosince_shape = waypoint_follower.publish_cosince_shape:main',
+            'publish_shape1 = waypoint_follower.publish_shape1:main',
+            'publish_shape2 = waypoint_follower.publish_shape2:main',
+            'publish_shape3 = waypoint_follower.publish_shape3:main'
         ],
     },
 )
