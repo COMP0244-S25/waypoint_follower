@@ -18,6 +18,7 @@ class PathFollower(Node):
     and publishes velocity commands to /cmd_vel.
     """
 
+    # NOTE: CANNOT CHANGE
     def __init__(self, odometry_topic):
         super().__init__('path_follower')
 
@@ -42,6 +43,10 @@ class PathFollower(Node):
         self.current_y = 0.0
         self.current_orientation = 0.0
         self.is_odom_received = False
+
+        # Thresholds
+        self.waypoint_threshold = 0.1  # Distance threshold to consider a waypoint reached
+        self.orientation_threshold = 0.05  # Orientation threshold for final alignment
 
         # Publisher to cmd_vel
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
@@ -68,6 +73,53 @@ class PathFollower(Node):
         self.timer = self.create_timer(timer_period, self.control_loop_callback)
         self.get_logger().info(f"Path Follower node started. Subscribing to odometry topic: {odometry_topic}")
 
+    # NOTE: CANNOT CHANGE
+    def normalize_angle(self, angle):
+            """
+            Normalize an angle to the range [-pi, pi].
+            """
+            while angle > math.pi:
+                angle -= 2.0 * math.pi
+            while angle < -math.pi:
+                angle += 2.0 * math.pi
+            return angle     
+
+    # NOTE: CANNOT CHANGE
+    def odom_callback(self, msg: Odometry):
+        """
+        Extracts and stores the robot's current pose from the odometry.
+        """
+        self.is_odom_received = True
+        self.current_x = msg.pose.pose.position.x
+        self.current_y = msg.pose.pose.position.y
+
+        # Convert quaternion to yaw (theta)
+        q = msg.pose.pose.orientation
+        siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        self.current_orientation = math.atan2(siny_cosp, cosy_cosp)
+
+    # NOTE: CANNOT CHANGE
+    def check_ending(self):
+        if not self.is_odom_received or self.path is None:
+            self.cmd_vel_pub.publish(Twist())
+            return True
+
+        # Check if all waypoints are reached
+        if self.current_waypoint_index >= len(self.path):
+            if self.end_time < 1e-3:
+                self.end_time = time.time()
+            self.get_logger().info(f"----- All waypoints reached. Stopping. ---- ")
+            self.get_logger().info(f"Sum of error: {self.sum_derivate:.3f}, Cost time: {self.end_time - self.start_time:.3f}s.")
+            self.cmd_vel_pub.publish(Twist())  # Stop the robot
+            return True
+        
+        return False 
+
+    # NOTE: STUDENTS ARE ALLOWED TO ADD THEIR OWN FUNCTIONS
+    def customized_functions(self):
+        pass
+
     # NOTE: CAN CHANGE
     def setup_parameters(self):
         # Maximum velocities
@@ -88,42 +140,15 @@ class PathFollower(Node):
         self.path = msg.poses  # List of PoseStamped messages
         self.current_waypoint_index = 0  # Reset to the first waypoint
         self.get_logger().info(f"Received new path with {len(self.path)} waypoints.")
-        self.start_time = time.time()
+        self.start_time = msg.header.stamp.sec + msg.header.stamp.nanosec / 1e9
         self.end_time = 0
 
-    def odom_callback(self, msg: Odometry):
-        """
-        Extracts and stores the robot's current pose from the odometry.
-        """
-        self.is_odom_received = True
-        self.current_x = msg.pose.pose.position.x
-        self.current_y = msg.pose.pose.position.y
-
-        # Convert quaternion to yaw (theta)
-        q = msg.pose.pose.orientation
-        siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
-        cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-        self.current_orientation = math.atan2(siny_cosp, cosy_cosp)
-
+    # NOTE: CAN CHANGE
     def control_loop_callback(self):
         """
         Periodic control loop callback. Computes PD control and publishes velocity commands.
         """
-        # Thresholds
-        self.waypoint_threshold = 0.1  # Distance threshold to consider a waypoint reached
-        self.orientation_threshold = 0.05  # Orientation threshold for final alignment
-
-        if not self.is_odom_received or self.path is None:
-            self.cmd_vel_pub.publish(Twist())
-            return
-
-        # Check if all waypoints are reached
-        if self.current_waypoint_index >= len(self.path):
-            self.get_logger().info(f"----- All waypoints reached. Stopping. ---- ")
-            self.get_logger().info(f"Sum of error: {self.sum_derivate:.3f}, Cost time: {self.end_time - self.start_time:.3f}s.")
-            self.cmd_vel_pub.publish(Twist())  # Stop the robot
-            if self.end_time < 1e-3:
-                self.end_time = time.time()
+        if self.check_ending():
             return
 
         # Get the current target waypoint
@@ -168,7 +193,7 @@ class PathFollower(Node):
         distance_to_waypoint = math.hypot(error_x, error_y)
         if distance_to_waypoint < self.waypoint_threshold:
             self.current_waypoint_index += 1  # Move to the next waypoint
-            # self.get_logger().info(f"Reached waypoint {self.current_waypoint_index - 1}. Moving to the next one.")
+            self.get_logger().info(f"Reached waypoint {self.current_waypoint_index - 1}. Moving to the next one.")
         else:
             # Move toward the current waypoint
             if abs(error_theta) > 1.0 and distance_to_waypoint > self.waypoint_threshold:
@@ -180,17 +205,6 @@ class PathFollower(Node):
                 self.get_logger().info("Moving forward")
 
         self.cmd_vel_pub.publish(twist_msg)
-
-    def normalize_angle(self, angle):
-        """
-        Normalize an angle to the range [-pi, pi].
-        """
-        while angle > math.pi:
-            angle -= 2.0 * math.pi
-        while angle < -math.pi:
-            angle += 2.0 * math.pi
-        return angle
-
 
 def main():
     import sys

@@ -32,7 +32,8 @@ setup(
             'publish_cosince_shape = waypoint_follower.publish_cosince_shape:main',
             'publish_shape1 = waypoint_follower.publish_shape1:main',
             'publish_shape2 = waypoint_follower.publish_shape2:main',
-            'publish_shape3 = waypoint_follower.publish_shape3:main'
+            'publish_shape3 = waypoint_follower.publish_shape3:main',
+            'path_marking = waypoint_follower.path_marking:main',
         ],
     },
 )
