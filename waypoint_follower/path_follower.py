@@ -116,6 +116,38 @@ class PathFollower(Node):
         
         return False 
 
+    # NOTE: CANNOT CHANGE
+    def compute_traj_error(self):
+        ################################## Error Computation
+        # NOTE: path error is defined as real_path_length / perfect_path_length
+        ideal_path_length = 0.0
+        for i in range(len(self.path) - 1):
+            wp1 = self.path[i].pose.position
+            wp2 = self.path[i + 1].pose.position
+            dx = wp2.x - wp1.x
+            dy = wp2.y - wp1.y
+            ideal_path_length += math.hypot(dx, dy)
+
+        # Update total path length
+        if not hasattr(self, 'previous_x'):
+            self.previous_x = self.current_x
+            self.previous_y = self.current_y
+        else:
+            dx = self.current_x - self.previous_x
+            dy = self.current_y - self.previous_y
+            self.sum_path_derivate += math.hypot(dx, dy)
+            self.previous_x = self.current_x
+            self.previous_y = self.current_y
+
+        duration = time.time() - self.start_time
+        if ideal_path_length > 0:
+            self.sum_derivate = self.sum_path_derivate / ideal_path_length
+        else:
+            self.sum_derivate = 0.0
+
+        self.get_logger().info(f"Sum of error: {self.sum_derivate:.3f}, Cost time: {time.time() - self.start_time:.3f}s.")
+        
+
     # NOTE: STUDENTS ARE ALLOWED TO ADD THEIR OWN FUNCTIONS
     def customized_functions(self):
         pass
@@ -141,6 +173,7 @@ class PathFollower(Node):
         self.current_waypoint_index = 0  # Reset to the first waypoint
         self.get_logger().info(f"Received new path with {len(self.path)} waypoints.")
         self.start_time = msg.header.stamp.sec + msg.header.stamp.nanosec / 1e9
+        self.sum_path_derivate = 0
         self.end_time = 0
 
     # NOTE: CAN CHANGE
@@ -172,7 +205,7 @@ class PathFollower(Node):
         derivative_x = error_x - self.prev_error_x
         derivative_y = error_y - self.prev_error_y
         derivative_theta = error_theta - self.prev_error_theta
-        self.sum_derivate += math.fabs(derivative_x) + math.fabs(derivative_y) + math.fabs(derivative_theta) / 180.0 * math.pi
+        self.compute_traj_error()
 
         # 3) PD control for linear velocities (x, y)
         vx = self.Kp_linear * error_x + self.Kd_linear * derivative_x
