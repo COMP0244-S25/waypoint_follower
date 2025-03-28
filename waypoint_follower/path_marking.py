@@ -81,19 +81,55 @@ class PathMarker(Node):
         cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
         self.current_orientation = math.atan2(siny_cosp, cosy_cosp)
 
-    def control_loop_callback(self):
-        """
-        Periodic control loop callback. Computes PD control and publishes velocity commands.
-        """
+    def check_ending(self):
         if not self.is_odom_received or self.path is None:
-            return
+            return True
 
         if self.current_waypoint_index >= len(self.path):
             if self.end_time < 1e-3:
                 self.end_time = time.time()
             print(f"----- All waypoints reached. Stopping. ---- ")
             print(f"Sum of error: {self.sum_derivate:.3f}, Cost time: {self.end_time - self.start_time:.3f}s.")
-            return
+            return True
+
+        return False 
+
+    def compute_traj_error(self):
+        ################################## Error Computation
+        # NOTE: path error is defined as real_path_length / perfect_path_length
+        ideal_path_length = 0.0
+        for i in range(len(self.path) - 1):
+            wp1 = self.path[i].pose.position
+            wp2 = self.path[i + 1].pose.position
+            dx = wp2.x - wp1.x
+            dy = wp2.y - wp1.y
+            ideal_path_length += math.hypot(dx, dy)
+
+        # Update total path length
+        if not hasattr(self, 'previous_x'):
+            self.previous_x = self.current_x
+            self.previous_y = self.current_y
+        else:
+            dx = self.current_x - self.previous_x
+            dy = self.current_y - self.previous_y
+            self.sum_path_derivate += math.hypot(dx, dy)
+            self.previous_x = self.current_x
+            self.previous_y = self.current_y
+
+        duration = time.time() - self.start_time
+        if ideal_path_length > 0:
+            self.sum_derivate = self.sum_path_derivate / ideal_path_length
+        else:
+            self.sum_derivate = 0.0
+
+        self.get_logger().info(f"Sum of error: {self.sum_derivate:.3f}, Cost time: {time.time() - self.start_time:.3f}s.")
+
+    def control_loop_callback(self):
+        """
+        Periodic control loop callback. Computes PD control and publishes velocity commands.
+        """
+        if self.check_ending():
+            return            
 
         target_pose = self.path[self.current_waypoint_index].pose
         x_target = target_pose.position.x
@@ -110,7 +146,7 @@ class PathMarker(Node):
         derivative_theta = error_theta - self.prev_error_theta
         
         # Identical error accumulation to original (including potential conversion artifact)
-        self.sum_derivate += math.fabs(derivative_x) + math.fabs(derivative_y) + math.fabs(derivative_theta) / 180.0 * math.pi
+        self.compute_traj_error()
 
         # Update previous errors
         self.prev_error_x = error_x
