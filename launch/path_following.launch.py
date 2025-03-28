@@ -38,6 +38,15 @@ def generate_launch_description():
             package='waypoint_follower',
             executable='path_follower',
             name='path_follower',
+            arguments=['--ros-args', '--log-level', 'warn'],
+            output='screen'
+        ),
+
+        # Path marking node
+        Node(
+            package='waypoint_follower',
+            executable='path_marking',
+            name='path_marking',
             output='screen'
         )
     ])

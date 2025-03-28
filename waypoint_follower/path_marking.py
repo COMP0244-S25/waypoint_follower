@@ -66,6 +66,7 @@ class PathMarker(Node):
         self.current_waypoint_index = 0
         self.get_logger().info(f"Tracking new path with {len(self.path)} waypoints")
         self.start_time = msg.header.stamp.sec + msg.header.stamp.nanosec / 1e9
+        self.sum_path_derivate = 0
         self.end_time = 0
 
     def odom_callback(self, msg: Odometry):
@@ -88,8 +89,8 @@ class PathMarker(Node):
         if self.current_waypoint_index >= len(self.path):
             if self.end_time < 1e-3:
                 self.end_time = time.time()
-            print(f"----- All waypoints reached. Stopping. ---- ")
-            print(f"Sum of error: {self.sum_derivate:.3f}, Cost time: {self.end_time - self.start_time:.3f}s.")
+            self.get_logger().info(f"----- All waypoints reached. Stopping. ---- ")
+            self.get_logger().info(f"Sum of error: {self.sum_derivate:.3f}, Cost time: {self.end_time - self.start_time:.3f}s.")
             return True
 
         return False 
