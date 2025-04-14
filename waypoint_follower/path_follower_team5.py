@@ -1,0 +1,309 @@
+# python3 src/waypoint_follower/waypoint_follower/path_follower.py /custom_odometry_topic
+
+#!/usr/bin/env python3
+
+import math
+import rclpy
+from rclpy.node import Node
+import time
+# import matplotlib.pyplot as plt  
+# import numpy as np
+
+from nav_msgs.msg import Odometry, Path
+from geometry_msgs.msg import Twist, PoseStamped
+
+
+class PathFollower(Node):
+    """
+    A ROS2 node that uses a PD controller to follow a path (list of waypoints).
+    Subscribes to /path for the target path and a specified odometry topic for the robot's current state,
+    and publishes velocity commands to /cmd_vel.
+    """
+
+    # NOTE: CANNOT CHANGE
+    def __init__(self, odometry_topic):
+        super().__init__('path_follower')
+
+        self.setup_parameters()
+
+        # self.all_linear_vels = [] 
+        # self.all_angular_vels = []
+
+        # sum of derivate
+        self.sum_derivate = 0
+        self.start_time = 0
+        self.end_time = 0
+
+        # Path and waypoints
+        self.path = None
+        self.current_waypoint_index = 0
+
+        # Previous errors (for derivative term)
+        self.prev_error_x = 0.0
+        self.prev_error_y = 0.0
+        self.prev_error_theta = 0.0
+
+        # Robot current state
+        self.current_x = 0.0
+        self.current_y = 0.0
+        self.current_orientation = 0.0
+        self.is_odom_received = False
+
+        # Thresholds
+        self.waypoint_threshold = 0.1  # Distance threshold to consider a waypoint reached
+        self.orientation_threshold = 0.05  # Orientation threshold for final alignment
+
+        # Publisher to cmd_vel
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.cmd_vel_pub.publish(Twist())
+
+        # Subscriber to odometry (with the specified topic)
+        self.odom_sub = self.create_subscription(
+            Odometry,
+            odometry_topic,
+            self.odom_callback,
+            10
+        )
+
+        # Subscriber to path
+        self.path_sub = self.create_subscription(
+            Path,
+            '/planner/path',
+            self.path_callback,
+            10
+        )
+
+        # Timer to periodically publish velocity commands
+        timer_period = 0.1  # [s] -> 10 Hz
+        self.timer = self.create_timer(timer_period, self.control_loop_callback)
+        self.get_logger().info(f"Path Follower node started. Subscribing to odometry topic: {odometry_topic}")
+        self.get_logger().warn('++++++ Team-5 Starting Testing')
+
+    # NOTE: CANNOT CHANGE
+    def normalize_angle(self, angle):
+            """
+            Normalize an angle to the range [-pi, pi].
+            """
+            while angle > math.pi:
+                angle -= 2.0 * math.pi
+            while angle < -math.pi:
+                angle += 2.0 * math.pi
+            return angle     
+
+    # NOTE: CANNOT CHANGE
+    def odom_callback(self, msg: Odometry):
+        """
+        Extracts and stores the robot's current pose from the odometry.
+        """
+        self.is_odom_received = True
+        self.current_x = msg.pose.pose.position.x
+        self.current_y = msg.pose.pose.position.y
+
+        # Convert quaternion to yaw (theta)
+        q = msg.pose.pose.orientation
+        siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        self.current_orientation = math.atan2(siny_cosp, cosy_cosp)
+
+    # NOTE: CANNOT CHANGE
+    def check_ending(self):
+        if not self.is_odom_received or self.path is None:
+            self.cmd_vel_pub.publish(Twist())
+            return True
+
+        # Check if all waypoints are reached
+        if self.current_waypoint_index >= len(self.path):
+            
+            # USED FOR TESTING ONLY
+            
+            '''times = list(range(1, len(self.all_linear_vels)+1))
+            plt.plot(times, self.all_linear_vels)
+            plt.title('Linear Vels')
+            plt.show()
+            
+            plt.plot(times, self.all_angular_vels)
+            plt.title('Angular Vels')
+            plt.show()'''
+
+            # USED FOR TESTING ONLY
+         
+            if self.end_time < 1e-3:
+                self.end_time = time.time()
+            self.get_logger().info(f"----- All waypoints reached. Stopping. ---- ")
+            self.get_logger().info(f"Sum of error: {self.sum_derivate:.3f}, Cost time: {self.end_time - self.start_time:.3f}s.")
+            self.cmd_vel_pub.publish(Twist())  # Stop the robot
+            return True
+        
+        return False 
+
+    # NOTE: CANNOT CHANGE
+    def compute_traj_error(self):
+        ################################## Error Computation
+        # NOTE: path error is defined as real_path_length / perfect_path_length
+        ideal_path_length = 0.0
+        for i in range(len(self.path) - 1):
+            wp1 = self.path[i].pose.position
+            wp2 = self.path[i + 1].pose.position
+            dx = wp2.x - wp1.x
+            dy = wp2.y - wp1.y
+            ideal_path_length += math.hypot(dx, dy)
+
+        # Update total path length
+        if not hasattr(self, 'previous_x'):
+            self.previous_x = self.current_x
+            self.previous_y = self.current_y
+        else:
+            dx = self.current_x - self.previous_x
+            dy = self.current_y - self.previous_y
+            self.sum_path_derivate += math.hypot(dx, dy)
+            self.previous_x = self.current_x
+            self.previous_y = self.current_y
+
+        duration = time.time() - self.start_time
+        if ideal_path_length > 0:
+            self.sum_derivate = self.sum_path_derivate / ideal_path_length
+        else:
+            self.sum_derivate = 0.0
+
+        self.get_logger().info(f"Sum of error: {self.sum_derivate:.3f}, Cost time: {time.time() - self.start_time:.3f}s.")
+        
+
+    # NOTE: STUDENTS ARE ALLOWED TO ADD THEIR OWN FUNCTIONS
+    def customized_functions(self):
+        pass
+
+    # NOTE: CAN CHANGE
+    def setup_parameters(self):
+        # Maximum velocities
+        self.max_linear_vel = 5.0 # meter
+        self.max_angular_vel = 1.51 # rad
+        self.ditto = False
+
+        # ================================================================ # 
+        self.Kp_linear = 1.0
+        self.Kp_angular = 1.1
+        
+        self.Kd_linear = 0.3
+        self.Kd_angular = 0.15
+        # ======= PID Stuff ======= # 
+        self.Ki_linear = 0.1725
+        self.Ki_angular = 0.1725
+
+        self.cum_error_x = 0.0
+        self.cum_error_y = 0.0
+        self.cum_error_theta = 0.0
+        # ================================================================ # 
+
+    # NOTE: CAN CHANGE
+    def path_callback(self, msg: Path):
+        """
+        Updates the target path when a new message is received.
+        """
+        self.path = msg.poses  # List of PoseStamped messages
+        self.current_waypoint_index = 0  # Reset to the first waypoint
+        self.get_logger().info(f"Received new path with {len(self.path)} waypoints.")
+        self.start_time = msg.header.stamp.sec + msg.header.stamp.nanosec / 1e9
+        self.sum_path_derivate = 0
+        self.end_time = 0
+
+    # NOTE: CAN CHANGE
+    def control_loop_callback(self):
+        """
+        Periodic control loop callback. Computes PID control and publishes velocity commands.
+        """
+        if self.check_ending():
+            return
+
+        # Get the current target waypoint
+        target_pose = self.path[self.current_waypoint_index].pose
+        x_target = target_pose.position.x
+        y_target = target_pose.position.y
+
+        # Convert quaternion to yaw (theta) for the target orientation
+        q = target_pose.orientation
+        siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        orientation_target = math.atan2(siny_cosp, cosy_cosp)
+
+        # 1) Compute errors
+        error_x = x_target - self.current_x
+        error_y = y_target - self.current_y
+        error_theta = self.normalize_angle(math.atan2(error_y, error_x) - self.current_orientation) 
+        error_orientation = self.normalize_angle(orientation_target - self.current_orientation)
+
+        # 2) Compute derivative of errors
+        derivative_x = error_x - self.prev_error_x
+        derivative_y = error_y - self.prev_error_y
+        derivative_theta = error_theta - self.prev_error_theta
+        self.compute_traj_error()
+
+         # ============= Integral Term Stuff ============= #
+        self.cum_error_x += error_x
+        self.cum_error_y += error_y
+        self.cum_error_theta += error_theta
+
+       # 3) P#I#D control for linear velocities (x, y)
+        vx = self.Kp_linear * error_x + self.Kd_linear * derivative_x #+ self.Ki_linear * self.cum_error_x
+        vy = self.Kp_linear * error_y + self.Kd_linear * derivative_y #+ self.Ki_linear * self.cum_error_y
+
+        # 4) PD control for angular velocity
+        vtheta = self.Kp_angular * error_theta + self.Kd_angular * derivative_theta #+ self.Ki_angular * self.cum_error_theta
+
+        # 5) Update previous error terms
+        self.prev_error_x = error_x
+        self.prev_error_y = error_y
+        self.prev_error_theta = error_theta
+
+        # 6) Publish velocity commands
+        twist_msg = Twist()
+
+        # Check if the robot has reached the current waypoint
+        distance_to_waypoint = math.hypot(error_x, error_y)
+        if distance_to_waypoint < self.waypoint_threshold:
+            self.current_waypoint_index += 1  # Move to the next waypoint
+            self.get_logger().info(f"Reached waypoint {self.current_waypoint_index - 1}. Moving to the next one.")
+            self.ditto = True
+        else:
+            # Move toward the current waypoint
+            if abs(error_theta) > 1.0 and distance_to_waypoint > self.waypoint_threshold:
+                twist_msg.angular.z = min(vtheta, self.max_angular_vel)
+                self.get_logger().info("Rotating before moving forward")
+            else:
+                twist_msg.linear.x = min(math.hypot(vx, vy), self.max_linear_vel)
+                twist_msg.angular.z = min(vtheta, self.max_angular_vel)
+                self.get_logger().info("Moving forward")
+
+        self.cmd_vel_pub.publish(twist_msg)
+        
+   
+        '''if self.ditto:
+            twist_msg.angular.z = min(vtheta, self.max_angular_vel)
+            self.cmd_vel_pub.publish(twist_msg)
+            self.get_logger().info(f"Turning on the spot.")
+            if abs(error_theta) < 0.3: 
+                self.ditto = False
+            else:
+                pass'''
+        
+
+def main():
+    import sys
+    args = sys.argv 
+
+    rclpy.init(args=args)
+
+    # Specify the odometry topic (default is '/Odometry')
+    odometry_topic = '/Odometry'  # Default value
+    node = PathFollower(odometry_topic)
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info("Keyboard interrupt detected, shutting down.")
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main() 

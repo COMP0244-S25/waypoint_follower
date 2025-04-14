@@ -45,6 +45,8 @@ class PathFollower(Node):
         self.is_odom_received = False
 
         # Thresholds
+        # TODO(gogojjh): waypoint_threshold should be smaller 
+        # TODO(gogojjh): orientation_threshold should be considered as the termination
         self.waypoint_threshold = 0.1  # Distance threshold to consider a waypoint reached
         self.orientation_threshold = 0.05  # Orientation threshold for final alignment
 
